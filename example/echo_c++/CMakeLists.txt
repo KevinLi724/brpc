@@ -29,7 +29,13 @@ set(CMAKE_PREFIX_PATH ${OUTPUT_PATH})
 
 include(FindThreads)
 include(FindProtobuf)
-protobuf_generate_cpp(PROTO_SRC PROTO_HEADER echo.proto)
+find_package(Protobuf 3 REQUIRED)
+
+include_directories(${Protobuf_INCLUDE_DIRS})
+
+execute_process(COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} --cpp_out=${PROJECT_SOURCE_DIR} --proto_path=${PROJECT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/echo.proto)
+list(APPEND PROTO_SRC "${PROJECT_SOURCE_DIR}/echo.pb.cc")
+list(APPEND PROTO_HEADER "${PROJECT_SOURCE_DIR}/echo.pb.h")
 # include PROTO_HEADER
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
@@ -100,7 +106,7 @@ include_directories(${LEVELDB_INCLUDE_PATH})
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(OPENSSL_ROOT_DIR
-        "/usr/local/opt/openssl"    # Homebrew installed OpenSSL
+            "/opt/homebrew/Cellar/openssl@3/3.3.0"    # Homebrew installed OpenSSL
         )
 endif()
 

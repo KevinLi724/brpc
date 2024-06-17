@@ -448,10 +448,10 @@ static bool read_proc_io(ProcIO* s) {
     memset(s, 0, sizeof(ProcIO));
     static pid_t pid = getpid();
     rusage_info_current rusage;
-    if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void**)&rusage) != 0) {
-        PLOG(WARNING) << "Fail to proc_pid_rusage";
-        return false;
-    }
+//    if (proc_pid_rusage(pid, RUSAGE_INFO_CURRENT, (void**)&rusage) != 0) {
+//        PLOG(WARNING) << "Fail to proc_pid_rusage";
+//        return false;
+//    }
     s->read_bytes = rusage.ri_diskio_bytesread;
     s->write_bytes = rusage.ri_diskio_byteswritten;
     return true;

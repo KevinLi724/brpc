@@ -26,10 +26,9 @@ option(WITH_DEBUG_SYMBOLS "With debug symbols" ON)
 option(WITH_THRIFT "With thrift framed protocol supported" OFF)
 option(WITH_SNAPPY "With snappy" OFF)
 option(WITH_RDMA "With RDMA" OFF)
-option(BUILD_UNIT_TESTS "Whether to build unit tests" OFF)
+option(BUILD_UNIT_TESTS "Whether to build unit tests" ON)
 option(BUILD_FUZZ_TESTS "Whether to build fuzz tests" OFF)
 option(BUILD_BRPC_TOOLS "Whether to build brpc tools" ON)
-option(DOWNLOAD_GTEST "Download and build a fresh copy of googletest. Requires Internet access." ON)
 
 # Enable MACOSX_RPATH. Run "cmake --help-policy CMP0042" for policy details.
 if(POLICY CMP0042)
@@ -255,7 +254,7 @@ if(WITH_BORINGSSL)
 else()
     if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         set(OPENSSL_ROOT_DIR
-            "/usr/local/opt/openssl" # Homebrew installed OpenSSL
+                "/opt/homebrew/Cellar/openssl@3/3.3.0"    # Homebrew installed OpenSSL
         )
     endif()
 
@@ -531,10 +530,8 @@ set(SOURCES
     )
 
 add_subdirectory(src)
-if(BUILD_UNIT_TESTS)
-    enable_testing()
-    add_subdirectory(test)
-endif()
+enable_testing()
+add_subdirectory(test)
 
 if(BUILD_FUZZ_TESTS)
     if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")

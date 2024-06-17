@@ -14,12 +14,13 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
+cmake_minimum_required(VERSION 3.28)
 
 find_package(Gperftools)
 include_directories(${GPERFTOOLS_INCLUDE_DIR})
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 
-include(CompileProto)
+#include(CompileProto)
 set(TEST_PROTO_FILES addressbook1.proto
                      addressbook_encode_decode.proto
                      addressbook_map.proto
@@ -35,22 +36,46 @@ set(TEST_PROTO_FILES addressbook1.proto
                      health_check.proto)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/test/hdrs)
 set(PROTOC_FLAGS ${PROTOC_FLAGS} -I${CMAKE_SOURCE_DIR}/src)
-compile_proto(PROTO_HDRS PROTO_SRCS ${CMAKE_BINARY_DIR}/test
-                                    ${CMAKE_BINARY_DIR}/test/hdrs
-                                    ${CMAKE_SOURCE_DIR}/test
-                                    "${TEST_PROTO_FILES}")
+
+find_package(Protobuf 3 REQUIRED)
+include_directories(${Protobuf_INCLUDE_DIRS})
+
+set(PROTOS_DIRS ${PROJECT_SOURCE_DIR}/test)
+set(DST_DIR ${PROJECT_SOURCE_DIR}/test)
+set(PROTO_SRCS "")
+set(PROTO_HDRS "")
+foreach (proto ${TEST_PROTO_FILES})
+    string(REPLACE "${PROTOS_DIRS}/" "" relative_path_proto ${proto})
+    string(REGEX REPLACE "\\.proto$" "" FIL_WE ${relative_path_proto})
+    list(APPEND PROTO_SRCS "${DST_DIR}/${FIL_WE}.pb.cc")
+    list(APPEND PROTO_HDRS "${DST_DIR}/${FIL_WE}.pb.h")
+    execute_process(COMMAND ${PROTOBUF_PROTOC_EXECUTABLE} --cpp_out=${DST_DIR} --proto_path=${PROTOS_DIRS} ${PROJECT_SOURCE_DIR}/test/${proto})
+endforeach ()
+
 add_library(TEST_PROTO_LIB OBJECT ${PROTO_SRCS} ${PROTO_HDRS})
 
 set(BRPC_SYSTEM_GTEST_SOURCE_DIR "" CACHE PATH "System googletest source directory.")
 
-if(DOWNLOAD_GTEST)
-    include(SetupGtest)
-elseif(BRPC_SYSTEM_GTEST_SOURCE_DIR)
-    add_subdirectory("${BRPC_SYSTEM_GTEST_SOURCE_DIR}" "${PROJECT_BINARY_DIR}/system-googletest-build")
-else()
-    message(FATAL_ERROR "Googletest is not available")
-endif()
+set(GTEST_ROOT ${PROJECT_SOURCE_DIR}/googletest/googletest)
+set(GTEST_BUILD_ROOT ${PROJECT_SOURCE_DIR}/googletest/googletest/build)
 
+# 查找Google Test的头文件
+find_path(GTEST_INCLUDE_DIRS NAMES gtest/gtest.h PATHS ${GTEST_ROOT} PATH_SUFFIXES include)
+include_directories(${GTEST_INCLUDE_DIRS})
+# 查找Google Test的库文件
+find_library(GTEST_LIBRARIES NAMES gtest PATHS ${GTEST_BUILD_ROOT} PATH_SUFFIXES lib)
+find_library(GTEST_MAIN_LIBRARIES NAMES gtest_main PATHS ${GTEST_BUILD_ROOT} PATH_SUFFIXES lib)
+
+# 确保找到了gtest和gtest_main
+if(NOT GTEST_INCLUDE_DIRS)
+    message(FATAL_ERROR "Cannot find Google Test include dirs")
+endif()
+if(NOT GTEST_LIBRARIES)
+    message(FATAL_ERROR "Cannot find Google Test lib")
+endif()
+if(NOT GTEST_MAIN_LIBRARIES)
+    message(FATAL_ERROR "Cannot find Google Test lib main")
+endif()
 set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} ${DEFINE_CLOCK_GETTIME} -DBRPC_WITH_GLOG=${WITH_GLOG_VAL} -DBRPC_WITH_RDMA=${WITH_RDMA_VAL} -DGFLAGS_NS=${GFLAGS_NS}")
 set(CMAKE_CPP_FLAGS "${CMAKE_CPP_FLAGS} -DBTHREAD_USE_FAST_PTHREAD_MUTEX -D__const__=__unused__ -D_GNU_SOURCE -DUSE_SYMBOLIZE -DNO_TCMALLOC -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -DUNIT_TEST -Dprivate=public -Dprotected=public -DBVAR_NOT_LINK_DEFAULT_VARIABLES -D__STRICT_ANSI__ -include ${PROJECT_SOURCE_DIR}/test/sstream_workaround.h")
 set(CMAKE_CXX_FLAGS "${CMAKE_CPP_FLAGS} -g -O2 -pipe -Wall -W -fPIC -fstrict-aliasing -Wno-invalid-offsetof -Wno-unused-parameter -fno-omit-frame-pointer")
@@ -66,6 +91,7 @@ if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
     endif()
 endif()
 
+message("PROJECT_SOURCE_DIR " ${PROJECT_SOURCE_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/test/cert1.key DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/test/cert2.key DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 file(COPY ${PROJECT_SOURCE_DIR}/test/cert1.crt DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
@@ -215,7 +241,7 @@ endif()
 
 # test_butil
 add_executable(test_butil ${TEST_BUTIL_SOURCES}
-                          ${CMAKE_CURRENT_BINARY_DIR}/iobuf.pb.cc)
+        ${PROJECT_SOURCE_DIR}/test/iobuf.pb.cc)
 target_link_libraries(test_butil brpc-shared-debug
                                  gtest
                                  ${GPERFTOOLS_LIBRARIES})
@@ -241,9 +267,10 @@ file(GLOB BTHREAD_UNITTESTS "bthread*unittest.cpp")
 foreach(BTHREAD_UT ${BTHREAD_UNITTESTS})
     get_filename_component(BTHREAD_UT_WE ${BTHREAD_UT} NAME_WE)
     add_executable(${BTHREAD_UT_WE} ${BTHREAD_UT})
-    target_link_libraries(${BTHREAD_UT_WE} gtest_main
+    target_link_libraries(${BTHREAD_UT_WE} ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES}
                                            brpc-shared-debug
-                                           ${GPERFTOOLS_LIBRARIES})
+                                           ${GPERFTOOLS_LIBRARIES}
+             )
     add_test(NAME ${BTHREAD_UT_WE} COMMAND ${BTHREAD_UT_WE})
 endforeach()
 
@@ -252,9 +279,8 @@ file(GLOB BRPC_UNITTESTS "brpc_*_unittest.cpp")
 foreach(BRPC_UT ${BRPC_UNITTESTS})
     get_filename_component(BRPC_UT_WE ${BRPC_UT} NAME_WE)
     add_executable(${BRPC_UT_WE} ${BRPC_UT} $<TARGET_OBJECTS:TEST_PROTO_LIB>)
-    target_link_libraries(${BRPC_UT_WE} brpc-shared-debug
-                                        gtest_main
-                                        ${GPERFTOOLS_LIBRARIES})
+    target_link_libraries(${BRPC_UT_WE} ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES} brpc-shared-debug
+                                        ${GPERFTOOLS_LIBRARIES}  )
     add_test(NAME ${BRPC_UT_WE} COMMAND ${BRPC_UT_WE})
 endforeach()
 
